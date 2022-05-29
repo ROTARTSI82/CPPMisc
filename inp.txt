@@ -1,0 +1,12 @@
+mult = func(f64 a, f64 b) -> f64 {
+    return a * b;
+}
+
+abc
+
+55i64
+4321
++
+
++
+1234
