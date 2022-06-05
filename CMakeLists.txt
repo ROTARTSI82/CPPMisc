@@ -28,7 +28,7 @@ target_include_directories(CPPMisc PRIVATE include src)
 
 # Find the libraries that correspond to the LLVM components
 # that we wish to use
-llvm_map_components_to_libnames(llvm_libs support core irreader orcjit native)
+llvm_map_components_to_libnames(llvm_libs all target support core irreader orcjit native)
 
 # Link against LLVM libraries
 target_link_libraries(CPPMisc ${llvm_libs})

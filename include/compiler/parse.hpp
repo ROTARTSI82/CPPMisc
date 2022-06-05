@@ -20,6 +20,13 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Verifier.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/GVN.h"
+#include "llvm/Transforms/Utils.h"
+
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 
 #include <charconv>
 #include <iomanip>
@@ -99,21 +106,34 @@ public:
 
     llvm::LLVMContext *ctx;
     std::unique_ptr<llvm::Module> module;
-    std::unique_ptr<llvm::IRBuilder<>> builder;
+    llvm::IRBuilder<> builder;
 
     llvm::Function *main = nullptr;
 
-    explicit Parser(const std::string_view &inp, llvm::LLVMContext *ctx) : input(inp), ctx(ctx) {
+    llvm::legacy::FunctionPassManager fpm;
+    llvm::PassManagerBuilder pm_builder{};
+//    llvm::PassManager gpm;
 
-        module = std::make_unique<llvm::Module>("Module", *ctx);
-        builder = std::make_unique<llvm::IRBuilder<>>(*ctx);
+    explicit Parser(const std::string_view &inp, llvm::LLVMContext *ctx) : input(inp), ctx(ctx), module(std::make_unique<llvm::Module>("Module", *ctx)), builder(*ctx), fpm(module.get()) {
+        fpm.add(llvm::createPromoteMemoryToRegisterPass());
+        fpm.add(llvm::createInstructionCombiningPass());
+        fpm.add(llvm::createReassociatePass());
+        fpm.add(llvm::createGVNPass());
+        fpm.add(llvm::createCFGSimplificationPass());
+
+        pm_builder.OptLevel = 3;
+        pm_builder.SizeLevel = 2;
+
+        pm_builder.populateFunctionPassManager(fpm);
+
+        fpm.doInitialization();
 
         // TODO: What the fuck are pointer address spaces? i'm just using getUnqual rn
         llvm::FunctionType *entry_point_signature = llvm::FunctionType::get(llvm::Type::getInt32Ty(*ctx), std::vector<llvm::Type *>{llvm::Type::getInt32Ty(*ctx), llvm::PointerType::getUnqual(llvm::Type::getInt8PtrTy(*ctx))}, false);
         main = llvm::Function::Create(entry_point_signature, llvm::Function::ExternalLinkage, "main", module.get());
 
         llvm::BasicBlock *block = llvm::BasicBlock::Create(*ctx, "entry", main);
-        builder->SetInsertPoint(block);
+        builder.SetInsertPoint(block);
     }
 
     ~Parser() = default;
@@ -233,10 +253,11 @@ public:
         // float literal
         if (ind < input.size() && input[ind] == '.') {
             auto val = static_cast<float64_t>(whole_part);
-            float64_t significance = 0.1;
+
+            uint64_t pow = 10;
             while (++ind < input.size() && std::isdigit(input[ind])) {
-                val += (input[ind] - '0') * significance;
-                significance /= 10.0;
+                val += (input[ind] - '0') / static_cast<float64_t>(pow);
+                pow *= 10.0;
             }
 
             // I would use
@@ -287,6 +308,10 @@ public:
             push_int<2, false>(whole_part);
         else if (type_lit == "u8")
             push_int<1, false>(whole_part);
+        else if (type_lit == "f64")
+            push_float<8>(static_cast<float64_t>(whole_part));
+        else if (type_lit == "f32")
+            push_float<4>(static_cast<float64_t>(whole_part));
 
         if (operands.size() != operands_size)
             ind += 3;
@@ -320,15 +345,16 @@ public:
                 for (int i = 1; i >= 0; i--) {
                     std::string_view view = input.substr(ind, i + 1);
                     if (get_operators()[i].count(view) > 0) {
-                        ind += i + 1;
+                        // ind now points to the last character of our operator,
+                        // and we rely on the later ind++; to increment it to the correct one
+                        ind += i;
+
                         get_operators()[i][view](this);
-                        goto continue_outer;
+                        break;
                     }
                 }
 
                 ind++;
-
-            continue_outer:
                 continue;
             }
 
@@ -344,11 +370,11 @@ public:
             operands.pop_back();
             operands.pop_back();
 
-            operands.emplace_back(Value{builder->CreateAdd(back.llvm, other.llvm), get_type<FloatingPointType, 8>()});
+            operands.emplace_back(Value{builder.CreateAdd(back.llvm, other.llvm), get_type<FloatingPointType, 8>()});
         }
 
         if (!operands.empty())
-            builder->CreateRet(operands.back().llvm);
+            builder.CreateRet(operands.back().llvm);
 
 //        builder->CreateCast
 
@@ -359,6 +385,8 @@ public:
 
         return nullptr;
     }
+
+    void brainfuck();
 };
 
 void emit_addition(Parser *parser) {
