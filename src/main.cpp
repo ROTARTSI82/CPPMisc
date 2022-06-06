@@ -34,7 +34,6 @@ int main(int argc, char **argv) {
     buffer << t.rdbuf();
 
     std::string str = buffer.str();
-    std::cout << str << '\n';
 
     LLVMInitializeNativeTarget();
     LLVMInitializeNativeAsmPrinter();
@@ -89,6 +88,15 @@ int main(int argc, char **argv) {
     }
 
     llvm::legacy::PassManager pass;
+
+    ADD_PRE_PASSES(pass)
+
+    parse.pm_builder.populateThinLTOPassManager(pass);
+    parse.pm_builder.populateLTOPassManager(pass);
+    parse.pm_builder.populateModulePassManager(pass);
+
+    ADD_POST_PASSES(pass)
+
     auto filetype = llvm::CGFT_ObjectFile;
 
     if (targ_machine->addPassesToEmitFile(pass, dest, nullptr, filetype)) {
@@ -99,12 +107,14 @@ int main(int argc, char **argv) {
     pass.run(*parse.module);
     dest.flush();
 
+    system("clang -O3 -Oz bootstrap.c output.o");
 
+    std::cout << "===== [Compilation Finished! JIT Now Running...] =====\n";
 
 
     cantFail(jit->addModule(std::move(parse.module)));
 
     int value = reinterpret_cast<int(*)(int, char **)>(llvm::cantFail(jit->lookup("main")).getAddress())(0, nullptr);
-    std::cout << "==== VALUE = " << value << ", float = " << *reinterpret_cast<float *>(&value) << '\n';
+//    std::cout << "==== VALUE = " << value << ", float = " << *reinterpret_cast<float *>(&value) << '\n';
     jit.reset();
 }

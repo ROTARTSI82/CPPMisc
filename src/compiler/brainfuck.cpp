@@ -1,7 +1,8 @@
 #include "compiler/parse.hpp"
 
 struct RetInfo {
-    llvm::BasicBlock *cont, *header;
+    llvm::BasicBlock *header, *body;
+    uint64_t loop_no;
 };
 
 void Parser::brainfuck() {
@@ -29,7 +30,7 @@ void Parser::brainfuck() {
 
     std::vector<RetInfo> loop_ret_addrs;
 
-    int loop_counter = 0;
+    uint64_t loop_counter = 0;
 
     while (ind < input.size()) {
         char cur = input[ind];
@@ -46,30 +47,31 @@ void Parser::brainfuck() {
 
         switch (cur) {
             case '[': {
-                auto count = std::to_string(loop_counter++);
+                auto count = std::to_string(loop_counter);
 
-                llvm::BasicBlock *header = llvm::BasicBlock::Create(*ctx, "loop_head" + count,  main);
+                llvm::BasicBlock *header = builder.GetInsertBlock();
                 llvm::BasicBlock *body = llvm::BasicBlock::Create(*ctx, "loop_body" + count, main);
-                llvm::BasicBlock *cont = llvm::BasicBlock::Create(*ctx, "loop_continue" + count, main);
-
-                // current block
-                builder.CreateBr(header);
-
-                builder.SetInsertPoint(header);
-                gep = builder.CreateGEP(arr, builder.CreateLoad(ptr_ind));
-                builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(gep), builder.getInt8(0)), body, cont);
 
                 builder.SetInsertPoint(body);
 
-                loop_ret_addrs.emplace_back(RetInfo{cont, header});
+                loop_ret_addrs.emplace_back(RetInfo{header, body, loop_counter++});
                 break;
             }
             case ']': {
                 if (loop_ret_addrs.empty())
                     emit_error("Unmatched ']': No loop to close");
                 auto ret = loop_ret_addrs.back();
-                builder.CreateBr(ret.header);
-                builder.SetInsertPoint(ret.cont);
+
+                llvm::BasicBlock *cont = llvm::BasicBlock::Create(*ctx, "loop_continue" + std::to_string(ret.loop_no), main);
+
+                gep = builder.CreateGEP(arr, builder.CreateLoad(ptr_ind));
+                builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(gep), builder.getInt8(0)), ret.body, cont);
+
+                builder.SetInsertPoint(ret.header);
+                gep = builder.CreateGEP(arr, builder.CreateLoad(ptr_ind));
+                builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(gep), builder.getInt8(0)), ret.body, cont);
+
+                builder.SetInsertPoint(cont);
                 loop_ret_addrs.pop_back();
                 break;
             }
@@ -96,7 +98,8 @@ void Parser::brainfuck() {
                 builder.CreateStore(builder.CreateCall(f_getchar, std::initializer_list<llvm::Value *>{}), gep);  // relies on auto trunc to convert i32 to i8
                 break;
             default:
-                emit_error("Unexpected character: " + std::string{cur});
+                // ignore
+//                emit_error("Unexpected character: " + std::string{cur});
                 break;
         }
 

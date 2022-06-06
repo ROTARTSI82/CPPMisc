@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.13.4)
 project(CPPMisc CXX)
 
 set(CMAKE_C_COMPILER "clang")
-set(CMAKE_CXX_COMPILER "clang++")
+#set(CMAKE_CXX_COMPILER "clang++")
 
 find_package(LLVM 10.0.0 REQUIRED CONFIG)
 
@@ -32,3 +32,10 @@ llvm_map_components_to_libnames(llvm_libs all target support core irreader orcji
 
 # Link against LLVM libraries
 target_link_libraries(CPPMisc ${llvm_libs})
+
+
+project(BFInterp CXX)
+add_executable(BFInterp src/interp.cpp)
+target_compile_features(BFInterp PUBLIC cxx_std_17)
+target_compile_options(BFInterp PUBLIC -Ofast -O3)
+target_link_options(BFInterp PUBLIC -Ofast -O3)

@@ -6,8 +6,8 @@
 #include <utility>
 #include <vector>
 
-#include "compiler/value.hpp"
 #include "compiler/operator.hpp"
+#include "compiler/value.hpp"
 
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/STLExtras.h"
@@ -17,10 +17,10 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Verifier.h"
-#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
@@ -36,16 +36,60 @@
 
 #include "compiler/kaleidoscope_jit.hpp"
 
+
+#define ADD_PRE_PASSES(fpm)                                \
+    fpm.add(llvm::createStraightLineStrengthReducePass()); \
+    fpm.add(llvm::createLoopRerollPass());                 \
+    fpm.add(llvm::createLoopUnrollPass(3));                \
+    fpm.add(llvm::createLoopUnrollAndJamPass(3));          \
+    fpm.add(llvm::createLoopRotatePass());                 \
+                                                           \
+    fpm.add(llvm::createLoopSimplifyCFGPass());            \
+    fpm.add(llvm::createLoopSimplifyPass());               \
+    fpm.add(llvm::createLICMPass());                       \
+    fpm.add(llvm::createLoopSinkPass());                   \
+    fpm.add(llvm::createLoopPredicationPass());            \
+    fpm.add(llvm::createLoopUnswitchPass());               \
+    fpm.add(llvm::createLoopInstSimplifyPass());           \
+                                                           \
+    fpm.add(llvm::createLoopVersioningLICMPass());         \
+    fpm.add(llvm::createLoopStrengthReducePass());         \
+    fpm.add(llvm::createLoopIdiomPass());                  \
+    fpm.add(llvm::createLoopDeletionPass());               \
+                                                           \
+    fpm.add(llvm::createCFGSimplificationPass());          \
+    fpm.add(llvm::createPromoteMemoryToRegisterPass());    \
+    fpm.add(llvm::createSeparateConstOffsetFromGEPPass()); \
+    fpm.add(llvm::createSROAPass());                       \
+                                                           \
+    fpm.add(llvm::createInstructionCombiningPass());       \
+    fpm.add(llvm::createReassociatePass());                \
+    fpm.add(llvm::createGVNPass());                        \
+                                                           \
+    fpm.add(llvm::createMergedLoadStoreMotionPass());
+
+
+#define ADD_POST_PASSES(fpm)                            \
+    fpm.add(llvm::createConstantHoistingPass());        \
+    fpm.add(llvm::createConstantPropagationPass());     \
+    fpm.add(llvm::createLowerConstantIntrinsicsPass()); \
+    fpm.add(llvm::createLoopSimplifyCFGPass());         \
+    fpm.add(llvm::createCFGSimplificationPass());       \
+                                                        \
+    fpm.add(llvm::createDeadStoreEliminationPass());    \
+    fpm.add(llvm::createDeadCodeEliminationPass());     \
+    fpm.add(llvm::createDeadInstEliminationPass());
+
 class Parser;
 
 
 void eat_function(Parser *parser) {
-//    std::cout << "eat func";
+    //    std::cout << "eat func";
 }
 
 template<typename T>
 void emit_typename(Parser *parser) {
-//    std::cout << "emit typename";
+    //    std::cout << "emit typename";
 }
 
 void emit_addition(Parser *parser);
@@ -78,14 +122,13 @@ inline std::unordered_map<std::string_view, std::function<void(Parser *)>> &get_
 }
 
 inline std::array<std::unordered_map<std::string_view, std::function<void(Parser *)>>, 2> &get_operators() {
-    static std::array<std::unordered_map<std::string_view, std::function<void(Parser *)>>, 2> OPERATORS = {{
-            {
-                    {"+", emit_addition},
+    static std::array<std::unordered_map<std::string_view, std::function<void(Parser *)>>, 2>
+            OPERATORS =
+                    {{{
+                              {"+", emit_addition},
 
-            },
-            {
-            }
-    }};
+                      },
+                      {}}};
 
     return OPERATORS;
 }
@@ -97,9 +140,9 @@ public:
     std::size_t ind = 0;
     std::size_t line_no = 1;// this is synced with `ind`
 
-//    OperandStack operands;
+    //    OperandStack operands;
     std::vector<Value> operands;
-//    std::vector<std::unique_ptr<Operator>> operators;
+    //    std::vector<std::unique_ptr<Operator>> operators;
 
 
     std::vector<std::size_t> lines;// input[lines[X]] is the beginning of line X+2.
@@ -112,19 +155,18 @@ public:
 
     llvm::legacy::FunctionPassManager fpm;
     llvm::PassManagerBuilder pm_builder{};
-//    llvm::PassManager gpm;
+    //    llvm::PassManager gpm;
 
     explicit Parser(const std::string_view &inp, llvm::LLVMContext *ctx) : input(inp), ctx(ctx), module(std::make_unique<llvm::Module>("Module", *ctx)), builder(*ctx), fpm(module.get()) {
-        fpm.add(llvm::createPromoteMemoryToRegisterPass());
-        fpm.add(llvm::createInstructionCombiningPass());
-        fpm.add(llvm::createReassociatePass());
-        fpm.add(llvm::createGVNPass());
-        fpm.add(llvm::createCFGSimplificationPass());
 
         pm_builder.OptLevel = 3;
         pm_builder.SizeLevel = 2;
 
+        ADD_PRE_PASSES(fpm)
+
         pm_builder.populateFunctionPassManager(fpm);
+
+        ADD_POST_PASSES(fpm)
 
         fpm.doInitialization();
 
@@ -138,9 +180,9 @@ public:
 
     ~Parser() = default;
 
-//    std::unique_ptr<Operator> get_operator() {
-//        return nullptr;
-//    }
+    //    std::unique_ptr<Operator> get_operator() {
+    //        return nullptr;
+    //    }
 
     std::string_view get_line(std::size_t line) {
         if (line - 2 >= lines.size())
@@ -226,13 +268,13 @@ public:
             get_keywords()[sym](this);
     }
 
-    template <std::size_t byte_size>
+    template<std::size_t byte_size>
     inline void push_float(float64_t value) {
         operands.emplace_back(Value{llvm::ConstantFP::get(*ctx, byte_size == 8 ? llvm::APFloat(value) : llvm::APFloat(static_cast<float32_t>(value))), get_type<FloatingPointType, byte_size>()});
     }
 
     // TODO: APInt and APFloat are pretty inelegant
-    template <std::size_t byte_size, bool is_signed>
+    template<std::size_t byte_size, bool is_signed>
     inline void push_int(uint64_t value) {
         // this code is so fucking cursed, and i love it
         operands.emplace_back(Value{llvm::ConstantInt::get(*ctx, llvm::APInt(8 * byte_size, value, is_signed)), get_type<typename Ternary<is_signed, SignedIntegerType, UnsignedIntegerType>::value, byte_size>()});
@@ -279,7 +321,7 @@ public:
             if (operands.size() != orig_size)
                 ind += 3;
             else
-                push_float<8>(val); // default to f64 for no ending
+                push_float<8>(val);// default to f64 for no ending
 
             return;
         }
@@ -316,7 +358,7 @@ public:
         if (operands.size() != operands_size)
             ind += 3;
         else
-            push_int<4, true>(whole_part); // default i32 for no ending
+            push_int<4, true>(whole_part);// default i32 for no ending
     }
 
     llvm::Value *shunting_yard() {
@@ -358,8 +400,8 @@ public:
                 continue;
             }
 
-//            if (cur == 'x')
-//                emit_error("test error");
+            //            if (cur == 'x')
+            //                emit_error("test error");
 
             ind++;
         }
@@ -376,7 +418,7 @@ public:
         if (!operands.empty())
             builder.CreateRet(operands.back().llvm);
 
-//        builder->CreateCast
+        //        builder->CreateCast
 
         llvm::verifyFunction(*main);
         llvm::verifyModule(*module);
