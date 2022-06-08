@@ -20,6 +20,7 @@
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
+#include "llvm/Pass.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar.h"
@@ -71,14 +72,12 @@
 
 #define ADD_POST_PASSES(fpm)                            \
     fpm.add(llvm::createConstantHoistingPass());        \
-    fpm.add(llvm::createConstantPropagationPass());     \
     fpm.add(llvm::createLowerConstantIntrinsicsPass()); \
     fpm.add(llvm::createLoopSimplifyCFGPass());         \
     fpm.add(llvm::createCFGSimplificationPass());       \
                                                         \
     fpm.add(llvm::createDeadStoreEliminationPass());    \
-    fpm.add(llvm::createDeadCodeEliminationPass());     \
-    fpm.add(llvm::createDeadInstEliminationPass());
+    fpm.add(llvm::createDeadCodeEliminationPass());
 
 class Parser;
 

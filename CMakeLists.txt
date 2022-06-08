@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.13.4)
-project(CPPMisc CXX)
+project(CPPMisc C CXX)
 
 set(CMAKE_C_COMPILER "clang")
 #set(CMAKE_CXX_COMPILER "clang++")
 
-find_package(LLVM 10.0.0 REQUIRED CONFIG)
+find_package(LLVM 14.0.0 REQUIRED CONFIG)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
@@ -21,8 +21,8 @@ add_definitions(${LLVM_DEFINITIONS_LIST})
 # Now build our tools
 add_executable(CPPMisc src/main.cpp)
 target_compile_features(CPPMisc PUBLIC cxx_std_17)
-target_compile_options(CPPMisc PUBLIC -Og -g)
-target_link_options(CPPMisc PUBLIC -Og -g)
+target_compile_options(CPPMisc PUBLIC -Og -g -Wextra -Wall -Wpedantic -Wno-unused-parameter)
+target_link_options(CPPMisc PUBLIC -Og -g -Wextra -Wall -Wpedantic -Wno-unused-parameter)
 
 target_include_directories(CPPMisc PRIVATE include src)
 

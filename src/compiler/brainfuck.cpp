@@ -64,37 +64,38 @@ void Parser::brainfuck() {
 
                 llvm::BasicBlock *cont = llvm::BasicBlock::Create(*ctx, "loop_continue" + std::to_string(ret.loop_no), main);
 
-                gep = builder.CreateGEP(arr, builder.CreateLoad(ptr_ind));
-                builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(gep), builder.getInt8(0)), ret.body, cont);
+                // should the GEP type by int8ty or int8ptrty?
+                gep = builder.CreateGEP(builder.getInt8Ty(), arr, builder.CreateLoad(builder.getInt64Ty(), ptr_ind));
+                builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(builder.getInt8Ty(), gep), builder.getInt8(0)), ret.body, cont);
 
                 builder.SetInsertPoint(ret.header);
-                gep = builder.CreateGEP(arr, builder.CreateLoad(ptr_ind));
-                builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(gep), builder.getInt8(0)), ret.body, cont);
+                gep = builder.CreateGEP(builder.getInt8Ty(), arr, builder.CreateLoad(builder.getInt64Ty(), ptr_ind));
+                builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(builder.getInt8Ty(), gep), builder.getInt8(0)), ret.body, cont);
 
                 builder.SetInsertPoint(cont);
                 loop_ret_addrs.pop_back();
                 break;
             }
             case '<':
-                builder.CreateStore(builder.CreateSub(builder.CreateLoad(ptr_ind), builder.getInt64(1)), ptr_ind);
+                builder.CreateStore(builder.CreateSub(builder.CreateLoad(builder.getInt64Ty(), ptr_ind), builder.getInt64(1)), ptr_ind);
                 break;
             case '>':
-                builder.CreateStore(builder.CreateAdd(builder.CreateLoad(ptr_ind), builder.getInt64(1)), ptr_ind);
+                builder.CreateStore(builder.CreateAdd(builder.CreateLoad(builder.getInt64Ty(), ptr_ind), builder.getInt64(1)), ptr_ind);
                 break;
             case '+':
-                gep = builder.CreateGEP(arr, builder.CreateLoad(ptr_ind));
-                builder.CreateStore(builder.CreateAdd(builder.CreateLoad(gep), builder.getInt8(1)), gep);
+                gep = builder.CreateGEP(builder.getInt8Ty(), arr, builder.CreateLoad(builder.getInt64Ty(), ptr_ind));
+                builder.CreateStore(builder.CreateAdd(builder.CreateLoad(builder.getInt8Ty(), gep), builder.getInt8(1)), gep);
                 break;
             case '-':
-                gep = builder.CreateGEP(arr, builder.CreateLoad(ptr_ind));
-                builder.CreateStore(builder.CreateSub(builder.CreateLoad(gep), builder.getInt8(1)), gep);
+                gep = builder.CreateGEP(builder.getInt8Ty(), arr, builder.CreateLoad(builder.getInt64Ty(), ptr_ind));
+                builder.CreateStore(builder.CreateSub(builder.CreateLoad(builder.getInt8Ty(), gep), builder.getInt8(1)), gep);
                 break;
             case '.':
-                gep = builder.CreateGEP(arr, builder.CreateLoad(ptr_ind));
-                builder.CreateCall(f_putchar, std::initializer_list<llvm::Value *>{builder.CreateLoad(gep)}); // calls in with i8 to func expecting i32
+                gep = builder.CreateGEP(builder.getInt8Ty(), arr, builder.CreateLoad(builder.getInt64Ty(), ptr_ind));
+                builder.CreateCall(f_putchar, std::initializer_list<llvm::Value *>{builder.CreateLoad(builder.getInt8Ty(), gep)}); // calls in with i8 to func expecting i32
                 break;
             case ',':
-                gep = builder.CreateGEP(arr, builder.CreateLoad(ptr_ind));
+                gep = builder.CreateGEP(builder.getInt8Ty(), arr, builder.CreateLoad(builder.getInt64Ty(), ptr_ind));
                 builder.CreateStore(builder.CreateCall(f_getchar, std::initializer_list<llvm::Value *>{}), gep);  // relies on auto trunc to convert i32 to i8
                 break;
             default:

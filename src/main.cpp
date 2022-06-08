@@ -25,7 +25,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/TargetRegistry.h"
+#include "llvm/MC/TargetRegistry.h"
 #include "llvm/Target/TargetMachine.h"
 
 int main(int argc, char **argv) {
@@ -64,10 +64,10 @@ int main(int argc, char **argv) {
 
 
 
-
+    std::unique_ptr<llvm::LLVMContext> ctx = std::make_unique<llvm::LLVMContext>();
     auto jit = llvm::cantFail(llvm::orc::KaleidoscopeJIT::Create());
 
-    Parser parse{str, &jit->getContext()};
+    Parser parse{str, ctx.get()};
 //    parse.module->setDataLayout(jit->getDataLayout());
     parse.module->setDataLayout(targ_machine->createDataLayout());
     parse.module->setTargetTriple(target_triple);
@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
     std::cout << "===== [Compilation Finished! JIT Now Running...] =====\n";
 
 
-    cantFail(jit->addModule(std::move(parse.module)));
+    cantFail(jit->addModule(llvm::orc::ThreadSafeModule(std::move(parse.module), std::move(ctx))));
 
     int value = reinterpret_cast<int(*)(int, char **)>(llvm::cantFail(jit->lookup("main")).getAddress())(0, nullptr);
 //    std::cout << "==== VALUE = " << value << ", float = " << *reinterpret_cast<float *>(&value) << '\n';
